@@ -2,7 +2,6 @@ var Graphics = require("./graphics");
 var Backend = require("./multiplayer");
 
 window.game = {
-	gfx: new Graphics(),
 	multi: new Backend()
 };
 

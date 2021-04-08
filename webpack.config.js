@@ -21,9 +21,9 @@ module.exports = {
 		new CopyWebpackPlugin([
 			{
 				from: "src",
-				ignore: ["*.js", "templates/*"],
+				ignore: ["*.js", "templates/*", "*.blend", "archive/*"],
 				transform: (content, path) => {
-					if (path.match(/\.png|\.jpg|\.gif/g)) return content;
+					if (path.match(/\.png|\.txt|\.jpg|\.gif/g)) return content;
 					if (path.match(/\.s[ca]ss$/g)) {
 						return Buffer.from(
 							postcss([autoprefixer]).process(

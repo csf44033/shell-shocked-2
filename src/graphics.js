@@ -2,12 +2,33 @@ const PI = Math.PI;
 const TAU = PI*2;
 const rad = PI/180;
 var cubeRotation = 0;
-console.log('started')
+
+// math for shaders
 const mat4 = new (require('./libraries/mat4'));
 const vec3 = new (require('./libraries/vec3'));
-console.log('error');
 
-function loadTexture(gl) {
+function openModel (path) {
+    data = ['dimension', 'normals', 'triangles', 'uv', 'vertices']
+    model = {}
+    Object.values(data).forEach(name => {
+        var xml = new XMLHttpRequest()
+        xml.onreadystatechange = () => {
+            if(xml.status == 200 && xml.readyState == 4){
+                var data = xml.responseText.split(',');
+                data.pop();
+                model[name] = data;
+            }
+        }
+        xml.open("GET", `${path}/${name}.txt`, false)
+        xml.send()
+    })
+    console.log('loaded')
+    return model;
+}
+
+const models = openModel('./models/red')
+
+function loadTexture(gl, url) {
     const texture = gl.createTexture();
     gl.bindTexture(gl.TEXTURE_2D, texture); 
 
@@ -18,39 +39,39 @@ function loadTexture(gl) {
     // we'll update the texture with the contents of the image.
     const level = 0;
     const internalFormat = gl.RGBA;
-    const width = 100;
-    const height = 100;
+    const width = 1;
+    const height = 1;
     const border = 0;
     const srcFormat = gl.RGBA;
     const srcType = gl.UNSIGNED_BYTE;
-    const pixels = new Uint8Array(width*height<<2).fill(0);
-    var r,g,b;
-    for(var i = 0; i < width; i ++){
-        for(var j = 0; j < height; j ++){
-            r =g=b=255;
-            if(j>50) r = g = b = 100;
+    const pixel = new Uint8Array([0,0,255,255]);
+    gl.texImage2D(gl.TEXTURE_2D, level, internalFormat, width, height, border, srcFormat, srcType, pixel);
 
-            var l = i + j * width << 2;
-            pixels[l] = ((5*i/width)%1)*255;
-            pixels[l+1]=0;
-            pixels[l+2]=((5*j/height)%1)*255;
-            pixels[l+3]=255;
+    const image = new Image();
+    image.onload = () =>{
+        gl.bindTexture(gl.TEXTURE_2D, texture)
+        gl.texImage2D(gl.TEXTURE_2D, level, internalFormat, srcFormat, srcType, image)
+
+        if(isPowerOf2(image.width) && isPowerOf2(image.height)){
+            gl.generateMipmap(gl.TEXTURE_2D)
+        }else{
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE)
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE)
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR)
         }
     }
+    image.src = url
+    return texture
+}
 
-    // opaque blue
-    gl.texImage2D(gl.TEXTURE_2D, level, internalFormat, width, height, border, srcFormat, srcType, pixels);  
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
-    return texture;
-}  
 function isPowerOf2(value) {
     return (value & (value - 1)) == 0;
 } 
+
 function sgn(x){
     return x<0?-1:1;
 }
+
 function initShaderProgram(gl, vsSource, fsSource){
     const vertexShader = loadShader(gl, gl.VERTEX_SHADER, vsSource);
     const fragmentShader = loadShader(gl, gl.FRAGMENT_SHADER, fsSource);
@@ -66,6 +87,7 @@ function initShaderProgram(gl, vsSource, fsSource){
     }
     return shaderProgram;
 };
+
 function loadShader(gl, type, source){
     const shader = gl.createShader(type);
     gl.shaderSource(shader, source);
@@ -79,47 +101,12 @@ function loadShader(gl, type, source){
 
 function initBuffers(gl, mod){
     //vertices, normals, triangles, uv, dimension
-    var houses = [models.house0, models.house1, models.house2]
-    var positions = [];
-    positions = positions.concat(models.winston.vertices)
-    var normals = models.winston.normals
-    var textureCoordinates = models.winston.uv
-    var indices = models.winston.triangles
-    var vertex_count = models.winston.vertices.length/3;
-
-    for(var j = 0; j < 3; j ++){
-        var k = Math.random()*3|0
-
-        normals = normals.concat(houses[k].normals)
-        textureCoordinates = textureCoordinates.concat(houses[k].uv)
-
-        for(var i = 0; i < houses[k].triangles.length; i ++){
-            indices.push(houses[k].triangles[i] + vertex_count)
-        }
-        vertex_count += houses[k].vertices.length/3
-        
-        for(var i = 0; i < houses[k].vertices.length; i +=3){
-            positions.push(houses[k].vertices[i] - 75)
-            positions.push(houses[k].vertices[i+1] + (j-1)*houses[k].dimension[1])
-            positions.push(houses[k].vertices[i+2] - houses[k].dimension[2])
-        }
-    }
-    /*
-    for(var j = 0; j < 3; j ++){
-        textureCoordinates = textureCoordinates.concat(mod.uv)
-        for(var i = 0; i < mod.triangles.length; i ++){
-            indices.push(mod.triangles[i] + mod.vertices.length*(j+3)/3 + models.winston.vertices.length/3)
-        }
-        for(var i = 0; i < mod.vertices.length; i +=3){
-            normals.push(-mod.normals[i])
-            normals.push(-mod.normals[i+1])
-            normals.push(mod.normals[i+2])
-            positions.push(-mod.vertices[i]+75)
-            positions.push(-mod.vertices[i+1]+ (j-1)*mod.dimension[1])
-            positions.push(mod.vertices[i+2])
-        }
-    }*/
-    console.log(positions.length, normals.length, mod.dimension[2])
+    console.log(mod)
+    var positions = mod.vertices;
+    var normals = mod.normals
+    var textureCoordinates = mod.uv
+    var indices = mod.triangles
+    console.log(positions.length/3, indices.length, textureCoordinates.length/2)
     const positionBuffer = gl.createBuffer();
     gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
     gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(positions), gl.STATIC_DRAW);
@@ -145,25 +132,31 @@ function initBuffers(gl, mod){
         vertexCount: indices.length
     };
 };
+
 function drawScene(gl, programInfo, buffers, texture, deltaTime){
     gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
     const fieldOfView = 45*rad;
     const aspect = gl.canvas.clientWidth/gl.canvas.clientHeight;
     const zNear = 0.1;
-    const zFar = 1000;
+    const zFar = 400;
     const projectionMatrix = mat4.perspective(fieldOfView, aspect, zNear, zFar);
-    z = -300
+    z = -3
     var modelViewMatrix = mat4.identity();
     var rotx = mat4.rotateX(-PI/2);
     var rotz = mat4.rotateZ(cubeRotation);
+
+    // rotate model
     modelViewMatrix = mat4.multpiply(modelViewMatrix, mat4.translate(0, 0, z));
     modelViewMatrix = mat4.multpiply(modelViewMatrix, rotx);
     modelViewMatrix = mat4.multpiply(modelViewMatrix, rotz);
+
+    // rotate normals
     var normalMatrix = mat4.identity();
     normalMatrix = mat4.multpiply(mat4.translate(0,0, -z), normalMatrix);
     normalMatrix = mat4.multpiply(mat4.transpose(rotx), normalMatrix);
     normalMatrix = mat4.multpiply(mat4.transpose(rotz), normalMatrix);
-    normalMatrix = mat4.transpose(normalMatrix)
+    normalMatrix = mat4.transpose(normalMatrix);
+
     {
         const numComponents = 3;
         const type = gl.FLOAT;
@@ -313,8 +306,9 @@ function main () {
         }
     };
 
-    var test = initBuffers(gl, models.house1);
-    const texture = loadTexture(gl);
+    var test = initBuffers(gl, models);
+    console.log('inint')
+    const texture = loadTexture(gl, './sprites/RenderTexture.png');
 
     var then = 0;
     function render(now){
